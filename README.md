@@ -1,12 +1,12 @@
 # Blender Light Manager 💡
 
-<img width="1478" alt="Blender Light Manager UI" src="https://github.com/user-attachments/assets/1d29377a-2541-4796-8571-081498679720">
+<img width="1903" height="964" alt="image" src="https://github.com/user-attachments/assets/7ebbba36-bc74-4644-9817-7961dc074aaa" />
 
 ## 1. Overview
 
 The Blender Light Manager is an add-on designed to streamline the lighting workflow within Blender. It provides a compact and intuitive user interface to manage, create, and modify all standard light types in your scene directly from a single, persistent panel. This tool is perfect for lighting artists, 3D generalists, and level designers who need to quickly iterate on lighting setups without constantly navigating the Outliner and the Object Data Properties panel.
 
-Built with PySide6, it offers a responsive and dockable interface that integrates smoothly with your Blender workspace.
+Built with PySide6, it offers a responsive interface that integrates smoothly with your Blender workspace.
 
 ## 2. Features
 
