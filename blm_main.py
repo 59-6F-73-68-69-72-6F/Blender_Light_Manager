@@ -17,7 +17,7 @@
 import os
 import sys
 
-directory = r"C:\Users\Yoshi\Documents\project_python\Blender_Light_Manager"
+directory = r"YOUR_PATH\Blender_Light_Manager"
 if directory not in sys.path:
     sys.path.append(directory)
 
