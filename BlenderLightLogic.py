@@ -17,6 +17,7 @@ class BlenderLightLogic(QObject):
     """
     A class that handles the logic and interaction between the UI and Blender.
     It manages light creation, renaming, deletion, and attribute modification.
+    And provides layer selection functionality.
     """
 
     def __init__(self, ui):
@@ -50,61 +51,105 @@ class BlenderLightLogic(QObject):
 
     def refresh(self, light_table: object):
         """
-        Refreshes  UI to reflect the current state of lights in the Blender scene.
+        Refreshes UI to reflect the current state of lights in the Blender scene.
+        This function schedules the actual refresh on Blender's main thread via bpy.app.timers
+        to avoid using bpy.context from a non-main (UI) thread.
         """
+        def _do_refresh():
+            try:
+                # REMOVE ALL EXISTING HANDLERS TO AVOID DUPLICATES
+                for job_id in self.script_jobs:
+                    if job_id in bpy.app.handlers.depsgraph_update_post:
+                        bpy.app.handlers.depsgraph_update_post.remove(job_id)
+                self.script_jobs.clear()
 
-        # REMOVE ALL EXISTING HANDLERS TO AVOID DUPLICATES
-        for job_id in self.script_jobs:
-            if job_id in bpy.app.handlers.depsgraph_update_post:
-                bpy.app.handlers.depsgraph_update_post.remove(job_id)
-        self.script_jobs.clear()
+                # SAVE CURRENT SCROLL POSITION
+                v_scroll_bar = light_table.verticalScrollBar()
+                current_pos = v_scroll_bar.value()
+                light_table.setRowCount(0)  # CLEAR THE TABLE
+                max_range = v_scroll_bar.maximum()
 
-        # SAVE CURRENT SCROLL POSITION
-        v_scroll_bar = light_table.verticalScrollBar()
-        current_pos = v_scroll_bar.value()
-        light_table.setRowCount(0)  # CLEAR THE TABLE
-        max_range = v_scroll_bar.maximum()
+                # REPOPULATE THE TABLE
+                # Prevent triggering view-layer change callbacks while updating the combo
+                self.ui.combo_view_layer.blockSignals(True)  # BLOCKING SIGNAL
 
-        # REPOPULATE THE TABLE
-        bpy.ops.object.select_all(action='DESELECT')
-        all_lights = []
-        for obj in bpy.data.objects:
-            if obj.type == 'LIGHT':
-                all_lights.append(obj)
+                scene = bpy.context.scene
+                actual_view_layer = bpy.context.view_layer
+                self.list_layers = sorted([vl.name for vl in scene.view_layers])
 
-        for light in all_lights:
-            light_type = light.data.type
+                # Determine Blender's authoritative active view layer (DCC)
+                window = getattr(bpy.context, 'window', None)
+                blender_active = None
+                if window is not None and getattr(window, 'view_layer', None) is not None:
+                    blender_active = window.view_layer.name
+                else:
+                    active_scene_vl = getattr(scene.view_layers, 'active', None)
+                    if active_scene_vl is not None:
+                        blender_active = active_scene_vl.name
+                    else:
+                        ctx_vl = getattr(bpy.context, 'view_layer', None)
+                        blender_active = ctx_vl.name if ctx_vl is not None else None
 
-            self.light_name_to_list(light, light_type, light_table)
-            self.mute_solo_to_list(light, light_table, light_type)
-            self.color_button_to_list(light, light_table)
-            self.entry_attr_num_to_list(light, "exposure", 5, light_table)
-            use_temp = self.checkbox_attr_to_list(light, "use_temperature", 6, light_table)
-            if use_temp == True:
-                self.entry_attr_num_to_list(light, "temperature", 7, light_table)
-                self.info_timer("Temperature enabled for this light")
-            else:
-                widget = QLabel("N/A")
-                widget.setAlignment(Qt.AlignCenter)
-                light_table.setCellWidget(self.row_position, 7, widget)
-            if light_type == "SUN" or light_type == "AREA":
-                widget = QLabel("N/A")
-                widget.setAlignment(Qt.AlignCenter)
-                light_table.setCellWidget(self.row_position, 8, widget)
-            else:
-                self.entry_attr_num_to_list(light, "shadow_soft_size", 8, light_table)
-            self.checkbox_attr_to_list(light, "use_shadow", 9, light_table)
-            #  add more attributes here based on your UI
+                # Preserve previous UI selection as fallback
+                previous_layer = self.ui.combo_view_layer.currentText() if hasattr(self.ui, 'combo_view_layer') else None
 
-            # RESTORE SCROLL POSITION
-            new_max_range = v_scroll_bar.maximum()
-            v_scroll_bar.setValue(current_pos)
-            if max_range - current_pos <= 1:
-                v_scroll_bar.setValue(new_max_range)
-            else:
-                v_scroll_bar.setValue(current_pos)
+                self.ui.combo_view_layer.clear()
+                self.ui.combo_view_layer.addItems(self.list_layers)
 
-        self.info_timer("Light Manager refreshed successfully.")
+                # Align UI to Blender's active view layer when possible; otherwise restore previous selection
+                if blender_active and blender_active in self.list_layers:
+                    self.ui.combo_view_layer.setCurrentText(blender_active)
+                elif previous_layer and previous_layer in self.list_layers:
+                    self.ui.combo_view_layer.setCurrentText(previous_layer)
+
+                self.ui.combo_view_layer.blockSignals(False)  # STOP BLOCKING SIGNAL
+
+                bpy.ops.object.select_all(action='DESELECT')
+                all_lights = [obj for obj in actual_view_layer.objects if obj.type == "LIGHT"]
+
+                for light in all_lights:
+                    light_type = light.data.type
+
+                    self.light_name_to_list(light, light_type, light_table)
+                    self.mute_solo_to_list(light, light_table, light_type)
+                    self.color_button_to_list(light, light_table)
+                    self.entry_attr_num_to_list(light, "exposure", 5, light_table)
+                    use_temp = self.checkbox_attr_to_list(light, "use_temperature", 6, light_table)
+                    if use_temp == True:
+                        self.entry_attr_num_to_list(light, "temperature", 7, light_table)
+                        self.info_timer("Temperature enabled for this light")
+                    else:
+                        widget = QLabel("N/A")
+                        widget.setAlignment(Qt.AlignCenter)
+                        light_table.setCellWidget(self.row_position, 7, widget)
+                    if light_type == "SUN" or light_type == "AREA":
+                        widget = QLabel("N/A")
+                        widget.setAlignment(Qt.AlignCenter)
+                        light_table.setCellWidget(self.row_position, 8, widget)
+                    else:
+                        self.entry_attr_num_to_list(light, "shadow_soft_size", 8, light_table)
+                    self.checkbox_attr_to_list(light, "use_shadow", 9, light_table)
+                    #  add more attributes here based on your UI
+
+                # RESTORE SCROLL POSITION (Moved outside the loop)
+                new_max_range = v_scroll_bar.maximum()
+                if max_range - current_pos <= 1:
+                    v_scroll_bar.setValue(new_max_range)
+                else:
+                    v_scroll_bar.setValue(current_pos)
+
+                self.info_timer("Light Manager refreshed successfully.")
+
+            except Exception:
+                # Swallow exceptions so timer unregisters cleanly
+                pass
+            return None
+
+        try:
+            bpy.app.timers.register(_do_refresh, first_interval=0.0)
+        except Exception:
+            # Fallback: run immediately (best-effort)
+            _do_refresh()
 
     def delete(self, light_table: object):
         """
@@ -491,13 +536,63 @@ class BlenderLightLogic(QObject):
                 else:
                     args[1].hideRow(row)
 
-    def render(self):
-        """ Triggers the rendering of the current scene in Blender."""
-        # Render Engine : "BLENDER_EEVEE","BLENDER_WORKBENCH","CYCLES"
-        bpy.context.scene.render.engine = "CYCLES"
+    def view_layers_change(self, combo_box: object):
+        """
+        Updates the active View Layer in Blender based on the UI selection
+        and refreshes the light table.
+        """
+        if not combo_box:
+            return
 
-        # "INVOKE_DEFAULT": Non-Blocking(work in background, "EXEC_DEFAULT": Blocking (wait until the render is completely finished)
-        # bpy.ops.render.render("INVOKE_DEFAULT")
+        layer_name = combo_box.currentText()
+        scene = getattr(bpy.context, 'scene', None)
+        if scene is None:
+            return
+
+        # Schedule the view-layer change on Blender's main thread to avoid context issues
+        def _apply_view_layer():
+            try:
+                layer = scene.view_layers.get(layer_name)
+                if layer is None:
+                    return None
+
+                window = getattr(bpy.context, 'window', None)
+                try:
+                    if window is not None:
+                        window.view_layer = layer
+                    else:
+                        scene.view_layers.active = layer
+                except Exception:
+                    # Try the scene assignment as a fallback
+                    try:
+                        scene.view_layers.active = layer
+                    except Exception:
+                        pass
+
+                # Force UI redraw if possible
+                window = getattr(bpy.context, 'window', None)
+                if window is not None and getattr(window, 'screen', None) is not None:
+                    for area in window.screen.areas:
+                        try:
+                            area.tag_redraw()
+                        except Exception:
+                            pass
+
+                # Refresh the UI (runs in Blender main thread via timer)
+                try:
+                    self.refresh(self.ui.light_table)
+                except Exception:
+                    pass
+
+            except Exception:
+                pass
+            return None  # unregister the timer after running once
+
+        try:
+            bpy.app.timers.register(_apply_view_layer, first_interval=0.0)
+        except Exception:
+            # If timers aren't available, try immediate application (best-effort)
+            _apply_view_layer()
 
     def info_timer(self, text: str, duration_ms: int = 3500):
         """
