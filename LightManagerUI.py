@@ -29,12 +29,9 @@ class LightManagerUI(QWidget):
     signal_table_selection = Signal(object)  # (table_widget)
     signal_light_deleted = Signal(object)  # (table_widget)
     signal_refresh = Signal(object)  # (table_widget)
+    signal_view_layers = Signal(object)  # (combo_box)
 
-    LIGHT_TYPES = [
-        "POINT",
-        "SUN",
-        "SPOT",
-        "AREA"]
+    LIGHT_TYPES = ["POINT", "SUN", "SPOT", "AREA"]
 
     def __init__(self):
         ''' Sets up the UI elements and connects signals to slots. '''
@@ -77,11 +74,8 @@ class LightManagerUI(QWidget):
         self.button_refresh = self.push_button("Refresh")
         self.button_refresh.setStyleSheet(" background-color: #8ecae6 ; color: black;")
 
-        self.button_render = self.push_button(" Render ")
-        self.button_render.setFixedSize(70, 30)
-        self.button_render.setContentsMargins(0, 0, 0, 0)
-        self.button_render.setLayoutDirection(Qt.RightToLeft)  # SET THE BUTTON TO POINT RIGHT
-        self.button_render.setStyleSheet(" background-color: #FFC107 ; color: black;")
+        title_view_layer = self.label_text("View Layer:")
+        self.combo_view_layer = self.combo_list([])
 
         self.button_rename = self.push_button("Rename Light")
         self.button_rename.setStyleSheet(" background-color: #D17D98 ; color: white;")
@@ -110,14 +104,16 @@ class LightManagerUI(QWidget):
         layoutV_01_01 = QVBoxLayout()
         layoutH_02 = QHBoxLayout()
         layoutH_03 = QHBoxLayout()
+        layoutH_04 = QHBoxLayout()
 
-        # layoutV_01_01.addWidget(self.button_render) # DISABLED RENDER BUTTON
         layoutH_02.addWidget(title_light_name)
         layoutH_02.addWidget(self.entry_light_name)
         layoutH_02.addWidget(title_light_type)
         layoutH_02.addWidget(self.combo_light_type)
         layoutH_03.addWidget(self.button_create_light)
         layoutH_03.addWidget(self.button_rename)
+        layoutH_04.addWidget(title_view_layer)
+        layoutH_04.addWidget(self.combo_view_layer)
         layoutV_02.addWidget(title_ligh_search)
         layoutV_02.addWidget(self.entry_ligh_search)
         layoutV_02.addWidget(self.light_table)
@@ -127,6 +123,7 @@ class LightManagerUI(QWidget):
         layoutV_01.addLayout(layoutV_01_01)
         layoutV_01.addLayout(layoutH_02)
         layoutV_01.addLayout(layoutH_03)
+        layoutV_02.addLayout(layoutH_04)
 
         group_box_01.setLayout(layoutV_01)
         group_box_02.setLayout(layoutV_02)
@@ -195,8 +192,10 @@ class LightManagerUI(QWidget):
         self.light_table.itemSelectionChanged.connect(
             self.emit_table_selection)
         self.entry_ligh_search.textChanged.connect(self.emit_light_search)
+        self.combo_view_layer.currentTextChanged.connect(self.emit_view_layers)
 
     # EMITTERS --------------------------------------
+
     def emit_light_created(self):
         """
         Gathers light name and type from the UI and emits the `signal_light_created`.
@@ -204,8 +203,7 @@ class LightManagerUI(QWidget):
         """
         self.light_name = self.entry_light_name.text()
         self.light_type = self.combo_light_type.currentText()
-        self.signal_light_created.emit(
-            self.light_name, self.light_type, self.light_table)
+        self.signal_light_created.emit(self.light_name, self.light_type, self.light_table)
         self.entry_light_name.clear()
 
     def emit_light_renamed(self):
@@ -228,8 +226,7 @@ class LightManagerUI(QWidget):
         """
         if self.light_table.selectedItems():
             selection = self.light_table.currentItem().text()
-            btn_question = QMessageBox.question(
-                self, "Question", f"Are you sure you want to delete {selection} ?")
+            btn_question = QMessageBox.question(self, "Question", f"Are you sure you want to delete {selection} ?")
             if btn_question == QMessageBox.Yes:
                 self.signal_light_deleted.emit(self.light_table)
             else:
@@ -248,8 +245,12 @@ class LightManagerUI(QWidget):
         self.signal_table_selection.emit(self.light_table)
 
     def emit_refresh(self):
-        """ Emits the `signal_refresh. """
+        """ Emits the `signal_refresh`. """
         self.signal_refresh.emit(self.light_table)
+
+    def emit_view_layers(self):
+        """ Emits the `signal_view_layers. """
+        self.signal_view_layers.emit(self.combo_view_layer)
 
 
 class CustomLineEditNum(QLineEdit):

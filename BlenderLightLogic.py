@@ -11,6 +11,7 @@ from LightManagerUI import CustomLineEditNum
 
 
 SCRIPT_PATH = os.path.dirname(os.path.abspath(__file__))
+PREFIX = "Lgt_"
 
 
 class BlenderLightLogic(QObject):
@@ -36,7 +37,7 @@ class BlenderLightLogic(QObject):
         Renames a light in the Blender scene and updates the UI accordingly.
         """
         num = 0
-        naming_convention = f"{new_name}.{num:03d}"
+        naming_convention = f"{PREFIX}{new_name}.{num:03d}"
 
         if not new_name.strip():
             self.info_timer("Error: New name cannot be empty.")
@@ -44,6 +45,7 @@ class BlenderLightLogic(QObject):
 
         if old_name in bpy.data.objects:
             bpy.data.objects[old_name].name = naming_convention
+            bpy.data.collections["C" + old_name].name = "C" + naming_convention
             self.refresh(light_table)
             self.info_timer(f"Light: '{old_name}' renamed to '{new_name}'")
         else:
@@ -105,7 +107,19 @@ class BlenderLightLogic(QObject):
                 self.ui.combo_view_layer.blockSignals(False)  # STOP BLOCKING SIGNAL
 
                 bpy.ops.object.select_all(action='DESELECT')
+                # Lights in the active view layer
                 all_lights = [obj for obj in actual_view_layer.objects if obj.type == "LIGHT"]
+                # Include lights that belong to CLgt_* collections so they remain visible in the UI
+                try:
+                    for obj in scene.objects:
+                        if obj.type == 'LIGHT':
+                            for coll in getattr(obj, 'users_collection', []):
+                                if coll and isinstance(coll.name, str) and coll.name.startswith("C" + PREFIX):
+                                    if obj not in all_lights:
+                                        all_lights.append(obj)
+                                    break
+                except Exception:
+                    pass
 
                 for light in all_lights:
                     light_type = light.data.type
@@ -143,7 +157,7 @@ class BlenderLightLogic(QObject):
             except Exception:
                 # Swallow exceptions so timer unregisters cleanly
                 pass
-            return None
+            return
 
         try:
             bpy.app.timers.register(_do_refresh, first_interval=0.0)
@@ -160,9 +174,14 @@ class BlenderLightLogic(QObject):
             return
 
         light_name = selected_items[0].text()  # Get the name of the selected light
-        obj_to_remove = bpy.data.objects.get(light_name)  # Get object by name
-        if obj_to_remove:
-            bpy.data.objects.remove(obj_to_remove, do_unlink=True)
+        light_obj_to_remove = bpy.data.objects.get(light_name)  # Get light by name
+        collection_to_remove = bpy.data.collections.get("C" + light_name)  # Get collection by name
+
+        if light_obj_to_remove and collection_to_remove or light_obj_to_remove:
+            if collection_to_remove:
+                bpy.data.collections.remove(collection_to_remove, do_unlink=True)
+            if light_obj_to_remove:
+                bpy.data.objects.remove(light_obj_to_remove, do_unlink=True)
             self.info_timer(f"Light '{light_name}' deleted successfully.")
             self.refresh(light_table)
         else:
@@ -171,21 +190,80 @@ class BlenderLightLogic(QObject):
     def light_table_selection(self, lightTable: object):
         """
         Selects the corresponding light in Blender when a row is selected in the UI table.
+        The operation is scheduled on Blender's main thread via bpy.app.timers.register to
+        avoid modifying bpy.context from the UI thread.
         """
         selected_items = lightTable.selectedItems()
-        if selected_items:
-            row = selected_items[0].row()
-            light_name_item = lightTable.item(row, 0)
-            if light_name_item:
-                light_name = light_name_item.text()
-                bpy.ops.object.select_all(action='DESELECT')  # CLEAR CURRENT SELECTION
+        if not selected_items:
+            def _clear_selection():
+                bpy.ops.object.select_all(action='DESELECT')
+
+            try:
+                bpy.app.timers.register(_clear_selection, first_interval=0.0)
+            except Exception:
+                _clear_selection()
+            return
+
+        row = selected_items[0].row()
+        light_name_item = lightTable.item(row, 0)
+        if not light_name_item:
+            return
+        light_name = light_name_item.text()
+
+        def _apply_selection():
+            try:
+                obj = bpy.data.objects.get(light_name)
+                if obj is None:
+                    return
+
+                scene = bpy.context.scene
+                # Determine the view layer referenced by the UI combo (where the object is listed)
+                vl_name = None
                 try:
-                    bpy.context.view_layer.objects.active = bpy.data.objects[light_name]  # SET THE ACTIVE ACTOR
-                    bpy.data.objects[light_name].select_set(True)  # SELECT THE ACTOR
-                except KeyError:
-                    self.info_timer(f"Error:  '{light_name}' None Existent")
-        else:
-            bpy.ops.object.select_all(action='DESELECT')
+                    vl_name = self.ui.combo_view_layer.currentText() if hasattr(self.ui, 'combo_view_layer') else None
+                except Exception:
+                    vl_name = None
+
+                target_vl = None
+                if vl_name:
+                    target_vl = scene.view_layers.get(vl_name)
+
+                # Prefer setting active/select on the target view layer object if present there
+                target_obj = None
+                if target_vl is not None:
+                    try:
+                        bpy.ops.object.select_all(action='DESELECT')
+                        target_obj = target_vl.objects.get(obj.name)
+                    except Exception:
+                        target_obj = None
+
+                # Fallback to the object from bpy.data
+                if target_obj is None:
+                    target_obj = obj
+
+                try:
+                    if target_vl is not None and target_obj is not None:
+                        target_vl.objects.active = target_obj
+                    else:
+                        # Use context view layer as fallback
+                        bpy.context.view_layer.objects.active = target_obj
+                except Exception:
+                    pass
+
+                try:
+                    # Select the object instance (works across layers)
+                    target_obj.select_set(True)
+                except Exception:
+                    pass
+
+            except Exception:
+                pass
+            return
+
+        try:
+            bpy.app.timers.register(_apply_selection, first_interval=0.0)
+        except Exception:
+            _apply_selection()
 
     def create_light(self, light_name: str, light_type: str, light_table: object):
         """
@@ -200,16 +278,17 @@ class BlenderLightLogic(QObject):
 
         # INCREMENTAL NAMING CONVENTION
         num = 0
-        naming_convention = f"LGT_{light_name}.{num:03d}"
+        naming_convention = f"{PREFIX}{light_name}.{num:03d}"
 
         # Create a new light data-block
         light_data = bpy.data.lights.new(name=naming_convention, type=light_type)
-
         # Create a new object with the light data-block
         light_object = bpy.data.objects.new(name=naming_convention, object_data=light_data)
 
-        # Link the object to the scene
-        bpy.context.collection.objects.link(light_object)
+        # Create a new collection
+        new_collection = bpy.data.collections.new("C" + naming_convention)
+        bpy.context.scene.collection.children.link(new_collection)
+        new_collection.objects.link(light_object)
 
         # POPULATE THE TABLE LIST
         self.refresh(light_table)  # REFRESH THE ENTIRE TABLE
@@ -443,49 +522,85 @@ class BlenderLightLogic(QObject):
                             solo_checkbox.blockSignals(False)
         self.update_all_lights_visibility(light_table)
 
+    def get_layer_collection_recursive(self, layer_collection, name):
+        """Recursively find a layer collection by name within the view layer hierarchy."""
+        if layer_collection.name == name:
+            return layer_collection
+        for child in layer_collection.children:
+            found = self.get_layer_collection_recursive(child, name)
+            if found:
+                return found
+        return
+
     def update_all_lights_visibility(self, light_table: object, *args):
         """
-        Updates the visibility of all lights based on the states of the 'Mute' and 'Solo' checkboxes.
+        Updates the visibility of all collections's lights based (per collection exclusion),
+        on the states of the 'Mute' and 'Solo' checkboxes.
         """
+        # Capture UI states immediately on the UI thread before switching to the Blender thread
+        target_vl_name = self.ui.combo_view_layer.currentText()
+        visibility_data = []
         soloed_row = -1
-        # CHECK IF ANY LIGHT IS SOLOED
-        for i in range(light_table.rowCount()):
-            solo_widget = light_table.cellWidget(i, 2)
-            if solo_widget:
-                solo_checkbox = solo_widget.findChild(QCheckBox)
-                if solo_checkbox and solo_checkbox.isChecked():
-                    # IF A SOLO CHECKBOX IS FOUND AND CHECKED, STORE ITS ROW INDEX
-                    soloed_row = i
-                    break
 
-        # ITERATE THROUGH ALL LIGHTS TO SET THEIR VISIBILITY
         for i in range(light_table.rowCount()):
-            light_name_item = light_table.item(i, 0)
+            name_item = light_table.item(i, 0)
             mute_widget = light_table.cellWidget(i, 1)
+            solo_widget = light_table.cellWidget(i, 2)
 
-            if not (light_name_item and mute_widget):
-                continue
+            if name_item and mute_widget and solo_widget:
+                light_name = name_item.text()
+                mute_cb = mute_widget.findChild(QCheckBox)
+                solo_cb = solo_widget.findChild(QCheckBox)
 
-            light_name = light_name_item.text()
+                # Store visibility and solo states
+                is_checked = mute_cb.isChecked() if mute_cb else True
+                is_soloed = solo_cb.isChecked() if solo_cb else False
+
+                if is_soloed:
+                    soloed_row = i
+
+                visibility_data.append((i, light_name, is_checked))
+
+        def _do_update():
             try:
-                if not bpy.data.objects[light_name]:
-                    continue
-            except KeyError:
-                continue
+                scene = bpy.context.scene
+                # Find the view layer object corresponding to the UI selection
+                view_layer = scene.view_layers.get(target_vl_name)
+                if not view_layer:
+                    view_layer = bpy.context.view_layer  # Fallback
 
-            mute_checkbox = mute_widget.findChild(QCheckBox)
+                for i, light_name, is_checked in visibility_data:
+                    # Recursively find the specific collection in the target view layer
+                    collection = self.get_layer_collection_recursive(view_layer.layer_collection, "C" + light_name)
+                    if not collection:
+                        continue
 
-            if bpy.data.objects[light_name] and mute_checkbox:
-                # DETERMINE VISIBILITY BASED ON SOLO AND MUTE STATES
-                is_visible = (i == soloed_row) if soloed_row != -1 else mute_checkbox.isChecked()
-                # SET THE VISIBILITY IN BLENDER
-                bpy.data.objects[light_name].hide_set(not is_visible)  # VIEWPORT VISIBILITY
-                bpy.data.objects[light_name].hide_render = not is_visible  # RENDER VISIBILITY
+                    # Visibility priority: Solo > Mute
+                    should_be_visible = (i == soloed_row) if soloed_row != -1 else is_checked
+
+                    try:
+                        # Exclude collection in the targeted view layer
+                        collection.exclude = not should_be_visible
+                    except Exception:
+                        pass
+
+                # Redraw viewports to show the update
+                for window in bpy.context.window_manager.windows:
+                    for area in window.screen.areas:
+                        if area.type == 'VIEW_3D':
+                            area.tag_redraw()
+            except Exception:
+                pass
+            return
+
+        # Execute the update on Blender's main thread
+        try:
+            bpy.app.timers.register(_do_update, first_interval=0.0)
+        except Exception:
+            _do_update()
 
     def set_color(self, light: bpy, color_button: QPushButton):
-        """
-        Opens a color picker dialog to set the light's color and updates the button's background color.
-        """
+        """ Opens a color picker dialog to set the light's color and updates the button's background color """
         if not light.data.color:
             return
         # GET THE ACTUAL LIGHT COLOR
@@ -554,7 +669,7 @@ class BlenderLightLogic(QObject):
             try:
                 layer = scene.view_layers.get(layer_name)
                 if layer is None:
-                    return None
+                    return
 
                 window = getattr(bpy.context, 'window', None)
                 try:

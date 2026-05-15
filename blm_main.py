@@ -1,18 +1,18 @@
-    ######################################################
-    # - BLENDER LIGHT MANAGER -
-    # AUTHOR : RUDY LETI
-    # DATE : 2025/10/09
-    # DESIGNED TO SPEED UP LIGHTING PRODUCTION PROCESS
-    #
-    # .LIST THE MOST COMMON BLENDER ENGINE LIGHTS
-    # . NAMING CONVENTION INTEGRATED
-    # . LIGHTS SELECTABLE FROM THE UI
-    # . ALLOW TO MUTE OR SOLO LIGHTS
-    # . ALLOW TO SEARCH LIGHTS BY NAME
-    # . ALLOW TO CREATE AND RENAME LIGHTS FROM THE UI
-    # . ALLOW TO DELETE LIGHTS FROM THE UI
-    # . ALLOW TO MODIFY THE MOST COMMON ATTRIBUTES FROM THE UI
-    ######################################################
+######################################################
+# - BLENDER LIGHT MANAGER -
+# AUTHOR : RUDY LETI
+# DATE : 2025/10/09
+# DESIGNED TO SPEED UP LIGHTING PRODUCTION PROCESS
+#
+# .LIST THE MOST COMMON BLENDER ENGINE LIGHTS
+# . NAMING CONVENTION INTEGRATED
+# . LIGHTS SELECTABLE FROM THE UI
+# . ALLOW TO MUTE OR SOLO LIGHTS
+# . ALLOW TO SEARCH LIGHTS BY NAME
+# . ALLOW TO CREATE AND RENAME LIGHTS FROM THE UI
+# . ALLOW TO DELETE LIGHTS FROM THE UI
+# . ALLOW TO MODIFY THE MOST COMMON ATTRIBUTES FROM THE UI
+######################################################
 
 import os
 import sys
@@ -24,7 +24,6 @@ if directory not in sys.path:
 import bpy
 from PySide6.QtGui import QPixmap, QColor, QPalette
 from PySide6.QtWidgets import QApplication
-
 
 import BlenderLightLogic as bll
 import LightManagerUI as lmui
@@ -75,8 +74,7 @@ class LaunchLightManagerOperator(bpy.types.Operator):
         if os.path.exists(logo_path):
             img = QPixmap(logo_path)
             ui.logo.setPixmap(img)
-            
-            
+
         # Apply a dark theme to the application
         app_instance.setStyle("Fusion")
         dark_palette = app_instance.palette()
@@ -101,15 +99,16 @@ class LaunchLightManagerOperator(bpy.types.Operator):
         ui.signal_light_created.connect(logic.create_light)
         ui.signal_light_renamed.connect(logic.rename_light)
         ui.signal_light_search.connect(logic.search_light)
-        ui.button_render.clicked.connect(logic.render)
         ui.signal_light_deleted.connect(logic.delete)
+        ui.signal_view_layers.connect(logic.view_layers_change)
         ui.signal_refresh.connect(logic.refresh)
-        
+
         # Initial refresh to populate the UI
         logic.refresh(ui.light_table)
 
         main_window_instance.show()
         return {'FINISHED'}
+
 
 class LIGHTMAN_PT_Panel(bpy.types.Panel):
     """Creates a Panel in the 3D Viewport sidebar"""
