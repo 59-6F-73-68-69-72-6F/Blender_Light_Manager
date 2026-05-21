@@ -2,7 +2,7 @@ import os
 import weakref
 from functools import partial
 
-from PySide6.QtWidgets import QWidget, QTableWidgetItem, QPushButton, QHBoxLayout, QCheckBox, QLabel, QColorDialog
+from PySide6.QtWidgets import QWidget, QTableWidgetItem, QPushButton, QHBoxLayout, QCheckBox, QLabel, QLineEdit, QColorDialog
 from PySide6.QtCore import Qt, QTimer, QObject
 from PySide6.QtGui import QPixmap, QColor
 import bpy
@@ -67,9 +67,13 @@ class BlenderLightLogic(QObject):
 
                 # SAVE CURRENT SCROLL POSITION
                 v_scroll_bar = light_table.verticalScrollBar()
-                current_pos = v_scroll_bar.value()
+                h_scroll_bar = light_table.horizontalScrollBar()
+                current_vpos = v_scroll_bar.value()
+                current_hpos = h_scroll_bar.value()
+                max_v_range = v_scroll_bar.maximum()
+                max_h_range = h_scroll_bar.maximum()
+
                 light_table.setRowCount(0)  # CLEAR THE TABLE
-                max_range = v_scroll_bar.maximum()
 
                 # REPOPULATE THE TABLE
                 # Prevent triggering view-layer change callbacks while updating the combo
@@ -143,14 +147,17 @@ class BlenderLightLogic(QObject):
                     else:
                         self.entry_attr_num_to_list(light, "shadow_soft_size", 8, light_table)
                     self.checkbox_attr_to_list(light, "use_shadow", 9, light_table)
+                    self.entry_attr_text_to_list(light, "lightgroup", 10, light_table)
+
                     #  add more attributes here based on your UI
 
                 # RESTORE SCROLL POSITION (Moved outside the loop)
-                new_max_range = v_scroll_bar.maximum()
-                if max_range - current_pos <= 1:
-                    v_scroll_bar.setValue(new_max_range)
+                new_vmax_range = v_scroll_bar.maximum()
+
+                if max_v_range - current_vpos <= 1:
+                    v_scroll_bar.setValue(new_vmax_range)
                 else:
-                    v_scroll_bar.setValue(current_pos)
+                    v_scroll_bar.setValue(current_vpos)
 
                 self.info_timer("Light Manager refreshed successfully.")
 
@@ -360,6 +367,80 @@ class BlenderLightLogic(QObject):
         colorBtn_layout.setContentsMargins(0, 0, 0, 0)
         light_table.setCellWidget(self.row_position, 4, colorBtn_widget)
 
+    def entry_attr_text_to_list(self, light: bpy.types.Object, attribute_name: str, column: int, light_table: object):
+        """
+        Adds a string input field to a cell for a specific string attribute (e.g., light group).
+        """
+        attribute_value = getattr(light, attribute_name, None)
+
+        bar_text = QLineEdit(placeholderText="AOV")
+        bar_text.setFixedSize(59, 29)
+        bar_text.setAlignment(Qt.AlignCenter)
+        bar_text.setContentsMargins(0, 0, 0, 0)
+        # Initialize UI with current Blender value
+        bar_text.setText("") if attribute_value is None else bar_text.setText(str(attribute_value))
+
+        def _update_blender_from_ui():
+            light_group_name = bar_text.text().strip()
+            try:
+                if light_group_name:
+                    bpy.ops.scene.view_layer_add_lightgroup(name=light_group_name)
+                    setattr(light, attribute_name, light_group_name)
+                    bar_text.setText(light_group_name)
+                    self.info_timer(text=f"{light.name} set Light Group: '{light_group_name}'")
+                else:
+                    setattr(light, attribute_name, "")
+                    self.info_timer(text=f"{light.name} cleared Light Group")
+            except (ValueError, RuntimeError) as e:
+                self.info_timer(f"Invalid input : {e}")
+                # ON ERROR, Reset the text to the current value in BLENDER
+                current_blender_val = getattr(light, attribute_name, None)
+                bar_text.setText("") if current_blender_val is None else bar_text.setText(str(current_blender_val))
+        bar_text.returnPressed.connect(_update_blender_from_ui)
+
+        """
+        Use a weak reference to the widget to prevent dangling pointers.
+        The handler can check if the widget still exists before accessing it.
+        """
+        bar_text_weak_ref = weakref.ref(bar_text)
+
+        def _update_ui_from_blender(scene, depsgraph):
+            widget = bar_text_weak_ref()
+            try:
+                if widget is None or light.name not in bpy.data.objects:
+                    return
+            except ReferenceError:
+                # The light object has been deleted.
+                return
+
+            # Check if the specific light object or its data-block was updated
+            for update in depsgraph.updates:
+                try:
+                    update_name = getattr(getattr(update, 'id', None), 'name', None)
+                except Exception:
+                    update_name = None
+
+                if update_name in (getattr(light, 'name', None), getattr(getattr(light, 'data', None), 'name', None)):
+                    widget.blockSignals(True)
+                    new_value = getattr(light, attribute_name, None)
+                    try:
+                        widget.setText("") if new_value is None else widget.setText(str(new_value))
+                    finally:
+                        widget.blockSignals(False)
+                    break
+
+        # CREATE A HANDLER TO LISTEN FOR CHANGES AND STORE CALLBACK FOR CLEANUP
+        callback = _update_ui_from_blender
+        bpy.app.handlers.depsgraph_update_post.append(callback)
+        self.script_jobs.append(callback)
+
+        widget = QWidget()
+        bar_text_layout = QHBoxLayout(widget)
+        bar_text_layout.addWidget(bar_text)
+        bar_text_layout.setAlignment(Qt.AlignCenter)
+        bar_text_layout.setContentsMargins(0, 0, 0, 0)
+        light_table.setCellWidget(self.row_position, column, widget)
+
     def entry_attr_num_to_list(self, light: bpy.types.Object, attribute_name: str, column: int, light_table: object):
         """
         Adds a numeric input field to a cell for a specific float or int attribute.
@@ -431,8 +512,9 @@ class BlenderLightLogic(QObject):
                         widget.blockSignals(False)
 
         # # CREATE A HANDLER TO LISTEN FOR CHANGES AND STORE ID FOR CLEANUP
-        job_id = bpy.app.handlers.depsgraph_update_post.append(_update_ui_from_blender)
-        self.script_jobs.append(job_id)
+        callback = _update_ui_from_blender
+        bpy.app.handlers.depsgraph_update_post.append(callback)
+        self.script_jobs.append(callback)
 
         widget = QWidget()
         bar_text_layout = QHBoxLayout(widget)

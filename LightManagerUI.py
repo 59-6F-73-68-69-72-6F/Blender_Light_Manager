@@ -8,8 +8,9 @@ from PySide6.QtWidgets import (QWidget, QTableWidget, QComboBox, QLabel, QLineEd
                                QVBoxLayout, QHBoxLayout, QAbstractItemView, QGroupBox, QApplication, QMessageBox, QScrollArea)
 
 
-TABLE_HEADER = ["Name", "V", "S", "Type", "Color", "Exposure", "Use Temp.", "Temperature", "Radius", "Shadow"]
-HEADER_SIZE = [160, 20, 20, 40, 55, 65, 70, 80, 60, 55]
+TABLE_HEADER = ["Name", "V", "S", "Type", "Color", "Exposure",
+                "Use Temp.", "Temperature", "Radius", "Shadow", "LightGroup"]
+HEADER_SIZE = [160, 20, 20, 40, 55, 65, 70, 80, 60, 55, 70]
 FONT = "Nimbus Sans, Bold"
 COLOR = "#c7c7c5"
 FONT_WEIGHT = 600
