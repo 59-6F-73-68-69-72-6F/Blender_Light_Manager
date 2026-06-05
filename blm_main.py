@@ -4,7 +4,7 @@
 # DATE : 2025/10/09
 # DESIGNED TO SPEED UP LIGHTING PRODUCTION PROCESS
 #
-# .LIST THE MOST COMMON BLENDER ENGINE LIGHTS
+# . LIST THE MOST COMMON BLENDER ENGINE LIGHTS
 # . NAMING CONVENTION INTEGRATED
 # . LIGHTS SELECTABLE FROM THE UI
 # . ALLOW TO MUTE OR SOLO LIGHTS
@@ -17,22 +17,24 @@
 import os
 import sys
 
-directory = r"YOUR_PATH\Blender_Light_Manager"
+import bpy
+from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QPixmap, QColor, QPalette
+
+directory = os.path.dirname(os.path.abspath(__file__))
 if directory not in sys.path:
     sys.path.append(directory)
 
-import bpy
-from PySide6.QtGui import QPixmap, QColor, QPalette
-from PySide6.QtWidgets import QApplication
-
 import BlenderLightLogic as bll
 import LightManagerUI as lmui
+import aov_cleaner
+
 
 bl_info = {
     "name": "Light Manager",
     "author": "Rudy Leti",
     "version": (1, 0, 0),
-    "blender": (3, 0, 0),
+    "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Light Manager",
     "description": "A tool to manage lights in the scene.",
     "category": "Lighting",
@@ -110,6 +112,16 @@ class LaunchLightManagerOperator(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class AovCleaner(bpy.types.Operator):
+    """Operator to clean up unused Light Groups (AOVs) in the scene"""
+    bl_idname = "wm.aov_cleaner"
+    bl_label = "Clean Unused Light Groups"
+
+    def execute(self, context):
+        aov_cleaner.garbage_oav()
+        return {'FINISHED'}
+
+
 class LIGHTMAN_PT_Panel(bpy.types.Panel):
     """Creates a Panel in the 3D Viewport sidebar"""
     bl_label = "Light Manager"
@@ -121,10 +133,14 @@ class LIGHTMAN_PT_Panel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         layout.operator(LaunchLightManagerOperator.bl_idname, text="Open Light Manager", icon='LIGHT')
+        layout.operator(AovCleaner.bl_idname, text="Clean Unused Light Groups", icon='NLA_PUSHDOWN')
+
 
 def register():
     bpy.utils.register_class(LaunchLightManagerOperator)
+    bpy.utils.register_class(AovCleaner)
     bpy.utils.register_class(LIGHTMAN_PT_Panel)
+
 
 def unregister():
     global main_window_instance
@@ -132,7 +148,9 @@ def unregister():
         main_window_instance.close()
         main_window_instance = None
     bpy.utils.unregister_class(LaunchLightManagerOperator)
+    bpy.utils.unregister_class(AovCleaner)
     bpy.utils.unregister_class(LIGHTMAN_PT_Panel)
+
 
 if __name__ == "__main__":
     register()

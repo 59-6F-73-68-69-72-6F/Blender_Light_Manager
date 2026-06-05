@@ -17,15 +17,18 @@ PREFIX = "Lgt_"
 class BlenderLightLogic(QObject):
     """
     A class that handles the logic and interaction between the UI and Blender.
-    It manages light creation, renaming, deletion, and attribute modification.
+    
+    It manages light creation, renaming, deletion, and attribute modification,
+    synchronizes Blender data-block changes with the UI using depsgraph handlers,
+    
     And provides layer selection functionality.
     """
 
     def __init__(self, ui):
         """
         Initializes the logic for the Light Manager.
-        Args:
-            ui (LightManagerUI): An instance of the UI class to which this logic will connect.
+        
+        Args: ui (LightManagerUI): An instance of the UI class to which this logic will connect.
         """
         super().__init__()
         self.ui = ui
@@ -54,6 +57,7 @@ class BlenderLightLogic(QObject):
     def refresh(self, light_table: object):
         """
         Refreshes UI to reflect the current state of lights in the Blender scene.
+        
         This function schedules the actual refresh on Blender's main thread via bpy.app.timers
         to avoid using bpy.context from a non-main (UI) thread.
         """
@@ -299,7 +303,6 @@ class BlenderLightLogic(QObject):
 
         # POPULATE THE TABLE LIST
         self.refresh(light_table)  # REFRESH THE ENTIRE TABLE
-
         self.info_timer(f" '{naming_convention}' has been created successfully.")
 
     def light_name_to_list(self, light: bpy.types.Object, light_type: str, light_table: object):
@@ -464,8 +467,9 @@ class BlenderLightLogic(QObject):
             bar_text.setText(f"{self.atttribute_value}")
 
         def _update_blender_from_ui():
-            """Gets called when the user finishes editing the text field."""
-
+            """
+            Gets called when the user finishes editing the text field.
+            """
             try:
                 # SET VALUE IN BLENDER
                 new_value = float(bar_text.text())
@@ -605,7 +609,9 @@ class BlenderLightLogic(QObject):
         self.update_all_lights_visibility(light_table)
 
     def get_layer_collection_recursive(self, layer_collection, name):
-        """Recursively find a layer collection by name within the view layer hierarchy."""
+        """
+        Recursively find a layer collection by name within the view layer hierarchy
+        """
         if layer_collection.name == name:
             return layer_collection
         for child in layer_collection.children:
@@ -682,7 +688,9 @@ class BlenderLightLogic(QObject):
             _do_update()
 
     def set_color(self, light: bpy, color_button: QPushButton):
-        """ Opens a color picker dialog to set the light's color and updates the button's background color """
+        """
+        Opens a color picker dialog to set the light's color and updates the button's background color
+        """
         if not light.data.color:
             return
         # GET THE ACTUAL LIGHT COLOR

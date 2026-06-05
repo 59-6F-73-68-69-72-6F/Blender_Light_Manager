@@ -49,7 +49,7 @@ class LightManagerUI(QWidget):
         """
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)  # KEEP WINDOW ON TOP
         self.setWindowTitle("Blender Light Manager")
-        self.setMinimumSize(735, 690)
+        self.setMinimumSize(735, 600)
         self.setMaximumSize(735, 690)
 
         self.logo = QLabel()
