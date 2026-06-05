@@ -1,6 +1,6 @@
 # Blender Light Manager 💡
 
-<img width="1903" height="964" alt="image" src="https://github.com/user-attachments/assets/7ebbba36-bc74-4644-9817-7961dc074aaa" />
+<img width="1919" height="1007" alt="image" src="https://github.com/user-attachments/assets/c8638485-f6f3-4d1f-9e9c-8d6f583109b3" />
 
 ## 1. Overview
 
@@ -21,7 +21,9 @@ Built with PySide6, it offers a responsive interface that integrates smoothly wi
     *   **Exposure**
     *   **Use Temperature** & **Temperature** Value
     *   **Radius** (`shadow_soft_size`)
-    *   **Shadow** visibility
+    *   **Shadow** Visibility
+    *   **Light Groups:** Manage assignments to specific light groups directly in the table.
+    *   **Light Group Cleanup:** Automatically purge unused Light Groups (AOVs) from the scene.
 *   **Live Scene Interaction:**
     *   Select a light in the UI to select it in the Blender viewport.
     *   Changes made in Blender's properties panel are reflected back in the Light Manager UI instantly.
@@ -30,6 +32,8 @@ Built with PySide6, it offers a responsive interface that integrates smoothly wi
     *   **Search:** Instantly filter the light list by name.
     *   **Refresh:** Manually update the list to reflect the current state of the scene.
     *   **Solo/Mute:** Quickly isolate a single light's contribution or toggle the visibility of multiple lights.
+    *   **Interactive Value Scrubbing:** Hover over any numeric field and use the mouse wheel to adjust values in real-time.
+    *   **View Layer Integration:** Switch between different Blender View Layers using the integrated dropdown to manage layer-specific light settings.
 
 ## 3. How to Use
 
@@ -48,6 +52,14 @@ The interface is divided into two main sections: creation/renaming controls at t
     1.  Select a light in the table.
     2.  Enter the new base name in the **Light Name** field.
     3.  Click **Rename Light**. The light object in the scene will be renamed.
+
+*   **Manage View Layers:**
+    1. Use the **View Layer** dropdown menu located below the light table.
+    2. Selecting a different layer will automatically update the tool's context and refresh the light list.
+
+*   **Clean Unused Light Groups:**
+    1. In the Blender Sidebar under the **Light Manager** tab, click **Clean Unused Light Groups**.
+    2. The tool will scan your scene and remove any Light Group definitions that are not assigned to any light, keeping your render passes organized.
 
 *   **Delete Light:**
     1.  Select a light in the table.
@@ -69,14 +81,15 @@ The core of the tool is the table, which gives you an at-a-glance view and contr
 | **V (Visible)** | A checkbox to toggle the light's visibility in the viewport and render (Mute). Unchecked means hidden. |
 | **S (Solo)** | A checkbox to solo a light. When checked, all other lights become invisible, allowing you to isolate its contribution. Only one light can be soloed at a time. |
 | **Type** | An icon representing the light's type. |
-| **Color** | A color swatch showing the light's current color. Click it to open a color picker and change the color. |
-| **Exposure** | A numeric field for the light's exposure value. You can type a value or use the **mouse wheel** to adjust it. |
+| **Color** | A color swatch showing the light's current color. Click it to open the native Blender color picker. |
+| **Exposure** | A numeric field for the light's exposure value. You can type a value or use the **mouse wheel** to scrub. |
 | **Use Temp.** | A checkbox to enable or disable temperature-based color. |
-| **Temperature**| A numeric field for the light's color temperature in Kelvin. This is only active if "Use Temp." is checked. |
-| **Radius** | A numeric field for the light's `shadow_soft_size`. Not applicable for Sun or Area lights. |
+| **Temperature**| A numeric field for the light's color temperature in Kelvin. Supports **mouse wheel** scrubbing. This is only active if "Use Temp." is checked. |
+| **Radius** | A numeric field for the light's `shadow_soft_size`. Supports **mouse wheel** scrubbing. Not applicable for Sun or Area lights. |
 | **Shadow** | A checkbox to toggle the light's ability to cast shadows. |
+| **LightGroup**| View or assign the light to a specific Light Group for rendering. |
 
-> **Note:** Some attributes like `Radius` may show "N/A" if they are not applicable to the selected light type (e.g., a Sun Light).
+> **Pro Tip:** When scrubbing numeric values (Exposure, Temperature, Radius) using the **mouse wheel**, you can hold **Ctrl** for larger increments or **Shift** for finer adjustments. Attributes may show "N/A" if they are not applicable to the specific light type.
 
 ## 4. Installation
 
@@ -138,7 +151,6 @@ Once the add-on is installed and enabled:
 1.  Open the 3D Viewport.
 2.  Press `N` to open the Sidebar (if it's not already open).
 3.  Find and click on the **"Light Manager"** tab.
-4.  Click the **"Open Light Manager"** button.
+4.  Click **Open Light Manager** to launch the UI, or **Clean Unused Light Groups** to perform scene maintenance.
 
 The Light Manager window will appear and remain on top of Blender for easy access.
-
