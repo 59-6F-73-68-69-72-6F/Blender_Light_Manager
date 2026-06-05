@@ -1,6 +1,6 @@
 # Blender Light Manager 💡
 
-<img width="1903" height="964" alt="image" src="https://github.com/user-attachments/assets/7ebbba36-bc74-4644-9817-7961dc074aaa" />
+<img width="1919" height="1007" alt="image" src="https://github.com/user-attachments/assets/c8638485-f6f3-4d1f-9e9c-8d6f583109b3" />
 
 ## 1. Overview
 
